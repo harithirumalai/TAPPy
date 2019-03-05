@@ -59,17 +59,20 @@ def generate_scatter3d(raw_pulse_data):
     
 
 # Generate dropdown in Tab 2 based on uploaded data in Tab 1
-@app.callback(Output('amu-dropdown', 'options'),
+@app.callback(Output('amu-dropdown-container', 'children'),
               [Input('data-tab1', 'children')])
-def preprocessing(raw_pulse_data):
+def update_amu_dropdown(raw_pulse_data):
     if raw_pulse_data is not None:
         raw_data = dict(raw_pulse_data[0]['props']['data'])
         amus = raw_data.keys()
-        options=[{'label': '{0}'.format(amu),
-                  'value': '{0}'.format(amu)}
-                 for amu in amus]
- 
-        return options
+
+        children = [dcc.Dropdown(id='amu-dropdown',
+                            options=[{'label': '{0}'.format(amu),
+                                       'value': '{0}'.format(amu)}
+                                      for amu in amus],
+
+                            style={'width': '49%', 'display': 'inline-block'})]
+        return children
 
 
 # Generate the baseline correction timespan RangeSlider based on whether
@@ -106,12 +109,9 @@ def display_sg_order_slider(smooth):
         return True
 
 @app.callback(Output('sg-window-size-slider', 'disabled'),
-              [Input('sg-radioitems', 'value')])
-def display_sg_order_slider(smooth):
-    if smooth is True:
-        return False
-    else:
-        return True
+              [Input('sg-order-slider', 'disabled')])
+def display_sg_window_slider(order):
+    return order
     
 # Update the Savitzky-Golay window size slider based on Order input
 @app.callback(Output('sg-window-size-container', 'children'),
@@ -214,6 +214,19 @@ def download_xlsx():
     downloadlink = workers.create_download_link(amu)
 
     return downloadlink
+
+
+# Reset data correction sliders to Disabled when amu is changed by user
+@app.callback(Output('baseline-corr-radioitems', 'value'),
+              [Input('amu-dropdown', 'value')])
+def reset_bc_slider(amu):
+    return False
+
+# Reset Savitzky Golay sliders when amu is changed by user
+@app.callback(Output('sg-radioitems', 'value'),
+              [Input('amu-dropdown', 'value')])
+def reset_sg_sliders(amu):
+    return False
 
 
 # Update the inert normalization dropdown based on the amu keys stored in the

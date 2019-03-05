@@ -115,9 +115,7 @@ def tab2():
                     
                     html.Label('Select AMU', style={'font-weight': 'bold'}),
 
-                    dcc.Dropdown(id='amu-dropdown',
-                
-                                 style={'width': '49%', 'display': 'inline-block'}),
+                    html.Div(id='amu-dropdown-container'),
 
                     html.Br(),
                     
@@ -241,12 +239,12 @@ def tab2():
 
 # Layout for creating the AMU selection Dropdown in Tab 2
 def amu_dropdown(amus):
-    return [dcc.Dropdown(id='amu-dropdown',
+    return dcc.Dropdown(id='amu-dropdown',
                          options=[{'label': '{0}'.format(amu),
                                    'value': '{0}'.format(amu)}
                                   for amu in amus],
 
-                         style={'width': '49%', 'display': 'inline-block'})]
+                         style={'width': '49%', 'display': 'inline-block'})
 
 
 # Layout for creating the baseline correction RangeSlider in Tab 2
@@ -278,17 +276,30 @@ def sg_window_size_slider(order):
         ws_min = order + 3
     else:
         ws_min = order + 2
-        
+
+    ws_max = ws_min + 21
     children = [
         html.Label('Window Size'),
         
         dcc.Slider(id='sg-window-size-slider',
                    min=ws_min,
-                   max=52,
+                   max=ws_max,
                    step=4,
+                   value=ws_min+2,
                    disabled=True,
-                   value=ws_min+4,
-                   marks={i: '{0}'.format(i) for i in range(ws_min, 52, 4)})]
+                   marks={i: '{0}'.format(i) for i in range(ws_min, ws_max, 2)})]
 
     return children
 
+
+# Layout for the inert-normalization dropdown
+def update_inert_normalization_dropdown(amus):
+
+    print 'hue', amus
+    children = [
+    
+        
+
+    ]
+
+    return children
