@@ -20,7 +20,7 @@ sys.path.append(r'..')
 from TAPSuite import read_raw
 from TAPSuite import savitzky_golay
 
-# Create a TAPSuite-data folder in the user's home directory to store files
+# Create a TAPSuite-data folder in the user's home directory to store temp files
 home = os.path.expanduser('~')
 savedir = os.path.join(home, 'TAPSuite-data')
 if not os.path.exists(savedir):
@@ -38,19 +38,9 @@ def load_data(contents, filename):
     pulse_data = read_raw(io.BytesIO(decoded))
 
     return pulse_data
-    #return save_data(pulse_data, filename)
 
 
-def store_data(temp, data):
-    if data is not None:        
-        amu = '{0:0.1f}'.format(data[0][0])
-        temp[amu] = data.tolist()
-        return dcc.Store(id='pp-data', data=temp)
-
-    else:
-        return dcc.Store(id='pp-data', data=temp)
-
-
+# Creates a new or appends to an existing dcc.Store component with raw data from the Upload component
 def append_data(temp, list_of_data):
     if len(list_of_data) is not None:
         for data in list_of_data:
@@ -68,7 +58,8 @@ def append_data(temp, list_of_data):
     else:
         return dcc.Store(id='raw_data', data=temp)
     
-    
+
+# Create or update database of raw data selected through the Upload component in tab 1
 def update_database(list_of_data, current_data):
     if current_data is not None:
         temp = dict(current_data[0]['props']['data'])
@@ -78,27 +69,17 @@ def update_database(list_of_data, current_data):
         temp = {}
         return append_data(temp, list_of_data)
 
-# Function the saves temporary pre-processed .npy files and updates
-# as the user makes changes in tab 2
-def write_temp(data, x):
-    t = data['times']
-    amu = data['amu']
-    tf = np.array(t).reshape(1, len(t))
-    pulses = np.array(data[x])
 
-    avg = np.mean(pulses, axis=0)
-    avg1 = avg.reshape(1, len(avg))
-        
-    c1 = np.array([float(amu)] * pulses.shape[1])
-    c1f = c1.reshape(1, len(c1))
+# Appends to or creates a new dcc.Store data object that stores all pre-processed data from tab 2
+def store_data(temp, data):
+    if data is not None:
+        amu = '{0:0.1f}'.format(data[0][0])
+        temp[amu] = data.tolist()
+        return dcc.Store(id='pp-data', data=temp)
 
-    d1 = np.append(c1f, tf, axis=0)
-    d2 = np.append(d1, avg1, axis=0)
-    final_data = np.append(d2, pulses, axis=0)
+    else:
+        return dcc.Store(id='pp-data', data=temp)
 
-    np.save('{0}.npy'.format(os.path.join(savedir, '{0:0.1f}'.format(amu))), final_data)
-
-            
 
 # Function that stores data on the fly based on pre-processing performed by
 # the user. Updates the overall storage dict if it exists, else creates new dict
@@ -173,11 +154,34 @@ def correct_data(data, x, timespan, corr, smooth, window_size, order):
     return data
 
 
+# Function the saves temporary pre-processed .npy files and updates
+# as the user makes changes in tab 2
+# This data is rendered into an average pulse response and stored in the
+# 'data-tab2' dcc Storage component.
+def write_temp(data, x):
+    t = data['times']
+    amu = data['amu']
+    tf = np.array(t).reshape(1, len(t))
+    pulses = np.array(data[x])
+
+    avg = np.mean(pulses, axis=0)
+    avg1 = avg.reshape(1, len(avg))
+
+    c1 = np.array([float(amu)] * pulses.shape[1])
+    c1f = c1.reshape(1, len(c1))
+
+    d1 = np.append(c1f, tf, axis=0)
+    d2 = np.append(d1, avg1, axis=0)
+    final_data = np.append(d2, pulses, axis=0)
+
+    np.save('{0}.npy'.format(os.path.join(savedir, '{0:0.1f}'.format(amu))), final_data)
+
+
+# Function to calculate area under the curve for each pulse using the trapezoid rule from SciPy.
 def get_areas(pulses, t):
     areas = np.array([trapz(pulse, t) for pulse in pulses])
 
     return areas
-
 
 def inert_normalization(amu_inert, pulses_data_all):
     
