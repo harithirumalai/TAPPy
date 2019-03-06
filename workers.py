@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 
-import dash_html_components as html
 import dash_core_components as dcc
 
 import io
@@ -14,11 +13,11 @@ import shutil
 from pandas import ExcelWriter
 from scipy.integrate import trapz
 import cPickle as pickle
+from math import factorial
 
-import sys
-sys.path.append(r'..')
+#import sys
+#sys.path.append(r'..')
 
-from TAPSuite import savitzky_golay
 
 # Create a TAPSuite-data folder in the user's home directory to store temp files
 home = os.path.expanduser('~')
@@ -168,7 +167,6 @@ def append_data(temp, list_of_data):
 
             return dcc.Store(id='raw-data', data=temp)
 
-
     else:
         return dcc.Store(id='raw_data', data=temp)
     
@@ -221,6 +219,35 @@ def select_dataset(raw_data, amu):
         return dataset
 
 
+def savitzky_golay(y, window_size, order, deriv=0, rate=1):
+#    Taken from https://scipy-cookbook.readthedocs.io/items/SavitzkyGolay.html
+#    Have not really thought much about it. Hopefully works for all cases!
+
+    try:
+        window_size = np.abs(np.int(window_size))
+        order = np.abs(np.int(order))
+    except ValueError, msg:
+        raise ValueError("window_size and order have to be of type int")
+
+    if window_size % 2 != 1 or window_size < 1:
+        raise TypeError("window_size size must be a positive odd number")
+
+    if window_size < order + 2:
+        raise TypeError("window_size is too small for the polynomials order")
+
+    order_range = range(order+1)
+    half_window = (window_size -1) // 2
+
+    b = np.mat([[k**i for i in order_range] for k in range(-half_window, half_window+1)])
+    m = np.linalg.pinv(b).A[deriv] * rate**deriv * factorial(deriv)
+
+    firstvals = y[0] - np.abs( y[1:half_window+1][::-1] - y[0] )
+    lastvals = y[-1] + np.abs(y[-half_window-1:-1][::-1] - y[-1])
+    y = np.concatenate((firstvals, y, lastvals))
+
+    return np.convolve( m[::-1], y, mode='valid')
+
+    
 # Function that loads data and the baseline correction timespan as arguments
 # and corrects the baseline for all pulses, returns the entire dataset
 def correct_data(data, x, timespan, corr, smooth, window_size, order):
