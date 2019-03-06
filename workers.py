@@ -4,6 +4,7 @@ import dash_html_components as html
 import dash_core_components as dcc
 
 import io
+import StringIO
 import base64
 import numpy as np
 import pandas as pd
@@ -12,12 +13,11 @@ import os
 import shutil
 from pandas import ExcelWriter
 from scipy.integrate import trapz
+import cPickle as pickle
 
 import sys
 sys.path.append(r'..')
 
-
-from TAPSuite import read_raw
 from TAPSuite import savitzky_golay
 
 # Create a TAPSuite-data folder in the user's home directory to store temp files
@@ -29,35 +29,100 @@ else:
     shutil.rmtree(savedir)
     os.mkdir(savedir)
 
+
+# Function to process raw TAP-1 files generated from experiments
+def read_raw(fil):
+    data = {}
+    d = np.loadtxt(fil, skiprows=1)
+
+    n_datapts = int(d[3])
+    n_pulses = int(d[7])
+    ct = d[5]
+
+    data['amu'] = float(d[13])*30
+    data['gain'] = int(d[6])
+    data['n_datapoints'] = n_datapts
+    data['n_pulses'] = n_pulses
+    data['collection time'] = ct
+    data['pulse spacing'] = d[15]
+    data['index'] = int(d[16])
+
+    pulse_data = d[18:]
+    data['pulses'] = np.array([pulse_data[i*n_datapts:(i+1)*n_datapts:1] for i in range(n_pulses)])
+    data['times'] = np.linspace(0, ct, n_datapts)
+
+    avg = np.mean(data['pulses'], axis=0)
+    data['avg pulse'] = avg
+
+    return data
     
+    
+# Function that processes processes TAP-1 files based on file type
+def read_tap1(fil, file_type):
+    if file_type == 'pkl':
+        data = pickle.load(fil)
+        return data
+
+    else:
+        data = read_raw(fil)
+        return data
+
+
+# Function that processes .xlsx files generated from TAP-2/3 experiments
+def read_tap2(fil, file_type):
+    x1 = pd.ExcelFile(fil)
+    data = [x1.parse(sheet_name, skiprows=0, index_col=None) for sheet_name in x1.sheet_names[3:]]
+
+    combined = {}
+    for i, d in enumerate(data):
+
+        data = {}
+        pulses = np.transpose(d.as_matrix(columns=d.columns[3:]))
+        times = d[d.columns[2]].values.tolist()
+        values = d['Value'].dropna().tolist()
+
+        n_datapts, n_pulses = pulses.shape
+        ct = float(values[2])
+
+        data['amu'] = float(values[0])
+        data['gain'] = int(values[1])
+        data['n_datapoints'] = n_datapts
+        data['n_pulses'] = n_pulses
+        data['collection time'] = float(values[3])
+        data['pulse spacing'] = ct
+        data['index'] = i
+
+        data['pulses'] = pulses
+        data['times'] = times
+
+        avg = np.mean(data['pulses'], axis=0)
+        data['avg pulse'] = avg
+
+        amu_s = '{0:0.1f}'.format(float(values[0]))
+        combined[amu_s] = data
+
+    return combined
+
+
 # Function that obtains the filepath from the STATE of the callback and reads
 # the pulse files using the TAPSuite.read_raw() function
 def load_data(contents, filename):
     content_type, content_string = contents.split(',')
     decoded = base64.b64decode(content_string)
-    pulse_data = read_raw(io.BytesIO(decoded))
+
+    extn = filename.split('.')[-1]
+
+    if extn == 'xlsx':
+        pulse_data = read_tap2(io.BytesIO(decoded))
+
+    elif extn == 'pkl':
+        pulse_data = read_tap1(StringIO.StringIO(decoded), 'pkl')
+        
+    else:
+        pulse_data = read_tap1(io.BytesIO(decoded), 'raw')
 
     return pulse_data
 
-
-# Creates a new or appends to an existing dcc.Store component with raw data from the Upload component
-def append_data(temp, list_of_data):
-    if len(list_of_data) is not None:
-        for data in list_of_data:
-            temp_data_amus = temp.keys()
-            amu = '{0:0.1f}'.format(data['amu'])
-            n = temp_data_amus.count(amu)
-
-            if n > 0:
-                amu = amu + '-{0}'.format(n+1)
-
-            temp[amu] = data
-        
-        return dcc.Store(id='raw-data', data=temp)
-
-    else:
-        return dcc.Store(id='raw_data', data=temp)
-    
 
 # Create or update database of raw data selected through the Upload component in tab 1
 def update_database(list_of_data, current_data):
@@ -68,6 +133,45 @@ def update_database(list_of_data, current_data):
     else:
         temp = {}
         return append_data(temp, list_of_data)
+
+
+# Creates a new or appends to an existing dcc.Store component with raw data from the Upload component
+def append_data(temp, list_of_data):
+    if len(list_of_data) is not None:
+        if len(list_of_data) > 1:
+            for data in list_of_data:
+                temp_data_amus = temp.keys()
+                amu = '{0:0.1f}'.format(data['amu'])
+                n = temp_data_amus.count(amu)
+                if n > 0:
+                    amu = amu + '-{0}'.format(n+1)
+                temp[amu] = data
+        
+            return dcc.Store(id='raw-data', data=temp)
+
+        elif len(list_of_data) == 1:
+            temp_data_amus = temp.keys()
+            data_dict = list_of_data[0]
+            new_data_keys = data_dict.keys()
+
+            if 'amu' not in new_data_keys:
+                for k in new_data_keys:
+                    n = temp_data_amus.count(k)
+                    if n > 0:
+                        amu = k + '-{0}'.format(n + 1)
+                    amu = '{0}'.format(k)
+                    temp[amu] = data_dict[k]
+
+            else:
+                amu = '{0:0.1f}'.format(data_dict['amu'])
+                temp[amu] = data_dict
+
+            return dcc.Store(id='raw-data', data=temp)
+
+
+    else:
+        return dcc.Store(id='raw_data', data=temp)
+    
 
 
 # Appends to or creates a new dcc.Store data object that stores all pre-processed data from tab 2
