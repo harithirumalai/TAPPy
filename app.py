@@ -20,6 +20,12 @@ app.config['suppress_callback_exceptions'] = True
 
 app.layout = layouts.app_layout()
 
+CACHE_CONFIG = {
+    'CACHE_TYPE': 'redis',
+    'CACHE_REDIS_URL': os.environ.get('REDIS_URL', 'localhost:6379')
+}
+cache = Cache()
+cache.init_app(app.server, config=CACHE_CONFIG)
 
 
 ######################################################################################
@@ -44,28 +50,37 @@ def read_store_uploaded_files(list_of_contents, list_of_names, current_data):
         children = [workers.update_database(list_of_data, current_data)]
 
         return children
+
     
+# Store 25 randomly generated pulses in the "condensed-data-tab1" dcc.Storage component
+# Use these data in the preprocessing section for faster functioning.
+@app.callback(Output('condensed-data-tab1', 'data'),
+              [State('data-tab1', 'children'),
+               State('condensed-data-tab1', 'data')])
+def store_condensed_tab1(raw_pulse_data, current_cond_data):
+    if raw_pulse_data is not None:
+        data = workers.store_condensed(raw_pulse_data, current_cond_data)
+
+        return data
+                
 
 # Generate 3D scatter plots for all data stored in Tab 1
 @app.callback(Output('3d-pulse-figs', 'children'),
-              [Input('data-tab1', 'children')])
-def generate_scatter3d(raw_pulse_data):
-    if raw_pulse_data is not None:
-        raw_data = dict(raw_pulse_data[0]['props']['data'])
+              [State('condensed-data-tab1', 'data')])
+def generate_scatter3d(raw_data):
+    if raw_data is not None:
         children = [figures.scatter3d(raw_data[k], k) for k in raw_data.keys()]
 
         return children
 
     
-
 # Generate dropdown in Tab 2 based on uploaded data in Tab 1
 @app.callback(Output('amu-dropdown-container', 'children'),
-              [Input('data-tab1', 'children')])
-def update_amu_dropdown(raw_pulse_data):
-    if raw_pulse_data is not None:
-        raw_data = dict(raw_pulse_data[0]['props']['data'])
+              [State('condensed-data-tab1', 'data')])
+def update_amu_dropdown(raw_data):
+    if raw_data is not None:
         amus = raw_data.keys()
-
+        
         children = [dcc.Dropdown(id='amu-dropdown',
                             options=[{'label': '{0}'.format(amu),
                                        'value': '{0}'.format(amu)}
@@ -78,12 +93,12 @@ def update_amu_dropdown(raw_pulse_data):
 # Generate the baseline correction timespan RangeSlider based on whether
 # baseline correction is enabled for the AMU chosen by user
 @app.callback(Output('baseline-corr-slider', 'children'),
-              [Input('baseline-corr-radioitems', 'value'),
-              Input('data-tab1', 'children'),
-              Input('amu-dropdown', 'value')])
-def update_baseline_corr_slider(corr, raw_pulse_data, amu):
+              [Input('baseline-corr-radioitems', 'value')
+               Input('amu-dropdown', 'value')],
+              [State('condensed-data-tab1', 'data')])
+def update_baseline_corr_slider(corr, amu, raw_data):
     if amu is not None:
-        dataset = dict(raw_pulse_data[0]['props']['data'])[amu]
+        dataset = raw_data[amu]
         children = layouts.baseline_corr_slider(dataset, disable=not(corr))
 
         return children
@@ -131,15 +146,14 @@ def update_sg_window_size(order):
 # Store corrected data in temp storage. This can be accessed by the user
 # to download xlsx files for the chosen amu.
 @app.callback(Output('temp-data', 'children'),
-              [Input('data-tab1', 'children'),
-               Input('amu-dropdown', 'value'),
-               Input('baseline-corr-radioitems', 'value'),
+              [Input('amu-dropdown', 'value'),
                Input('time-range-slider', 'value'),
-               Input('sg-radioitems', 'value'),
                Input('sg-window-size-slider', 'value'),
-               Input('sg-order-slider', 'value')])
-def perform_correction(raw_pulse_data, amu, corr, timespan, smooth, window_size, order):
-
+               Input('sg-order-slider', 'value')],
+              [State('data-tab1', 'children'),
+               State('baseline-corr-radioitems', 'value'),
+               State('sg-radioitems', 'value')])
+def perform_correction(amu, timespan, window_size, order, raw_pulse_data, corr, smooth):
     if amu is not None:        
         if corr is True and smooth is True:
             x = 'baseline corr smooth pulses'
@@ -153,60 +167,74 @@ def perform_correction(raw_pulse_data, amu, corr, timespan, smooth, window_size,
         dataset = dict(raw_pulse_data[0]['props']['data'])[amu]
         corrected_dataset = workers.correct_data(dataset, x, timespan, corr,
                                                  smooth, window_size, order)
-        
-        return [dcc.Store(id='temp', data=corrected_dataset), x]
 
+        params = [amu, x, timespan, corr, smooth, window_size, order]
+
+        temp_data = {}
+        temp_data['data'] = corrected_dataset
+        temp_data['params'] = params
+        
+        return [dcc.Store(id='temp', data=temp_data), x]#, params]
+
+    
 # Read the temp data and plot the average pulse 
 @app.callback(Output('avg-fig-tab2', 'children'),
-              [Input('temp-data', 'children')])
+              [State('temp-data', 'children')])
 def plot_avg_pulse(stuff):
     if stuff is not None:
-        data, x = stuff
-        pulse_data = data['props']['data']
+        temp_data, x = stuff
+        pulse_data = temp_data['props']['data']['data']
         children = [figures.scatter(pulse_data, type_of_pulse=x)]
 
         return children
 
 
-# Read temp data and append the data under the amu as the key in the overall data dict
-@app.callback(Output('data-tab2', 'children'),
-              [Input('temp-data', 'children')],
-              [State('data-tab2', 'children')])
-def store_pulses(stuff, current_data):
+# Read params from temp data and correct full data with the same params.
+# Store in temp-data-full
+@app.callback(Output('temp-data-full', 'data'),
+              [State('temp-data', 'children'),
+               State('data-tab1', 'children')])
+def correct_all_pulses(stuff, raw_pulse_data):
     if stuff is not None:
-        data, x = stuff
-        pulse_data = data['props']['data']
-        children = [workers.store_pp_pulses(current_data, pulse_data, x)]
+        temp_data, params = stuff
+        amu, x, timespan, corr, smooth, window_size, order = temp_data['props']['data']['params']
+        dataset = dict(raw_pulse_data[0]['props']['data'])[amu]
+        corrected_dataset = workers.correct_data(dataset, x, timespan, corr,
+                                                 smooth, window_size, order)
+
+        temp_data = {}
+        temp_data['data'] = corrected_dataset
+        temp_data['type_of_pulse'] = x
+        
+        return temp_data
+
+# Read data from temp-data-full and append to data in data-tab2
+@app.callback(Output('data-tab2', 'children'),
+              [State('temp-data-full', 'data'),
+               State('data-tab2', 'children')])
+def store_pulses(temp_data, current_data):
+    if temp_data is not None:
+        children = [workers.store_pp_pulses(current_data,
+                                            temp_data['data'],
+                                            temp_data['type_of_pulse'])]
         
         return children
-
 
 # Monitor and create new link for dynamically modified data, when new data is stored
 # in the temp stoarge as the preprocessing is performed by the user.
 # The href component of the download button is updated through the
 # Flask server route and an xlsx file is generated for download
 @app.callback(Output('download-link-1', 'href'),
-              [Input('temp-data', 'children')])
+              [State('temp-data-full', 'data')])
 def update_link1(stuff):
-    data, x = stuff
-    pulse_data = data['props']['data']
-    amu = '{0:0.1f}'.format(pulse_data['amu'])
-    workers.write_temp(pulse_data, x)
+    if stuff is not None:
+        pulse_data, x = stuff['data'], stuff['type_of_pulse']
+        amu = '{0:0.1f}'.format(pulse_data['amu'])
+        workers.write_temp(pulse_data, x)
     
-    return '/dash/url?value={0}'.format(amu)
+        return '/dash/url?value={0}'.format(amu)
 
-# Update link 2
-@app.callback(Output('download-link-2', 'href'),
-              [Input('temp-data', 'children')])
-def update_link2(stuff):
-    data, x = stuff
-    pulse_data = data['props']['data']
-    amu = '{0:0.1f}'.format(pulse_data['amu'])
-    workers.write_temp(pulse_data, x)
     
-    return '/dash/url?value={0}'.format(amu)
-
-
 # Defining the route for the download link
 @app.server.route('/dash/url')
 def download_xlsx():
@@ -224,7 +252,7 @@ def reset_bc_slider(amu):
 
 # Reset Savitzky Golay sliders when amu is changed by user
 @app.callback(Output('sg-radioitems', 'value'),
-              [Input('amu-dropdown', 'value')])
+              [State('amu-dropdown', 'value')])
 def reset_sg_sliders(amu):
     return False
 
@@ -271,5 +299,5 @@ def download_xlsx_inert():
     return downloadlink
 
 if __name__ == '__main__':
-    app.run_server(debug=True)
+    app.run_server(debug=True, processes=6)
 

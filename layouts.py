@@ -82,7 +82,12 @@ def tab1():
         # Second section showing 3D scatter plots of all uploaded files
         html.Div(id='3d-pulse-figs'),
         
-        html.Div(id='data-tab1', style={'display': 'none'})]
+        html.Div(id='data-tab1', style={'display': 'none'}),
+
+        #html.Div(dcc.Store(id='condensed-data-tab1')),
+
+        html.Div(id='condensed-data-tab1', style={'display': 'none'})
+    ]
 
 
 # Layout for Tab 2
@@ -123,9 +128,13 @@ def tab2():
     
                     html.Div(id='avg-fig-tab2'),
 
-                    html.Div(id='temp-data'),
+                    html.Div(id='temp-data', style={'display': 'none'}),
+
+                    html.Div(dcc.Store(id='temp-data-full')),
 
                     html.Div(id='data-tab2'),
+
+                    html.Div(dcc.Store(id='condensed-data-tab2')),
 
                     html.Hr()],
                      
@@ -150,12 +159,6 @@ def tab2():
                     ]),
 
                     html.Div(id='baseline-corr-slider'),
-
-                    html.Br(),
-
-                    html.Div([html.A(html.Button('Download', id='download-button-1'),
-                                     id='download-link-1',
-                                     target='_blank')]),
 
                     html.Br(),
 
@@ -194,16 +197,14 @@ def tab2():
                                     'margin': '10px',
                                     'height': '60px'}),
                     
-                    html.Div([html.Br(),
-
-                              html.A(html.Button('Download', id='download-button-2'),
-                                     id='download-link-2',
-                                     target='_blank'),
-                              html.Button('Save', id='save-button-2')],
+                    html.Div([html.A(html.Button('Download', id='download-button-1'),
+                                     id='download-link-1',
+                                     target='_blank')],
+                             
                              style={'width': '49%',
                                     'display': 'inline-block',
-                                    'lineHeight': '60px',
-                                    'height': '60px'}),
+                                    'lineHeight': '180px',
+                                    'height': '130px'}),
 
                     html.Hr(),
 
@@ -235,16 +236,6 @@ def tab2():
                      className="row")])
         
     ])]
-
-
-# Layout for creating the AMU selection Dropdown in Tab 2
-def amu_dropdown(amus):
-    return dcc.Dropdown(id='amu-dropdown',
-                         options=[{'label': '{0}'.format(amu),
-                                   'value': '{0}'.format(amu)}
-                                  for amu in amus],
-
-                         style={'width': '49%', 'display': 'inline-block'})
 
 
 # Layout for creating the baseline correction RangeSlider in Tab 2

@@ -12,10 +12,10 @@ colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
 def scatter3d(pulse_data, k):
     n_time_pts = len(pulse_data['times'])
     index = pulse_data['index']
-    inds = np.sort(np.random.randint(0, len(pulse_data['pulses']), 25))
-    n_pulses = len(inds)
+    n_pulses = len(pulse_data['pulses'])
+    inds = np.arange(0, n_pulses)
     xdata = np.array([pulse_data['times'],]*n_pulses)
-    zdata = np.array([pulse_data['pulses'][i] for i in inds])
+    zdata = pulse_data['pulses']
     ydata = np.array([[i+1]*n_time_pts for i in range(n_pulses)])
     
 
@@ -34,17 +34,17 @@ def scatter3d(pulse_data, k):
                              for x1, z1, y1 in zip(xdata, zdata, ydata)],
                     
                     'layout': go.Layout(scene={'xaxis': {'title': {'text': 'Time (s)',
-                                                         'font': {'size': 20}},
+                                                                   'font': {'size': 20}},
                                                          'visible': True,
                                                          'type': 'linear',
                                                          'tickmode': 'auto',
                                                          'nticks': 6},
                                                'yaxis': {'title': {'text': 'Pulse #',
-                                                         'font': {'size': 20}},
+                                                                   'font': {'size': 20}},
                                                          'visible': True,
                                                          'type': 'linear'},
                                                'zaxis': {'title': {'text': 'Signal (V)',
-                                                         'font': {'size': 20}},
+                                                                   'font': {'size': 20}},
                                                          'visible': True,
                                                          'type': 'linear',
                                                          'tickmode': 'auto',
@@ -57,7 +57,7 @@ def scatter3d(pulse_data, k):
             config={'showSendToCloud': True}),
         html.Hr()],
                     
-        style={'width': '49%', 'display': 'inline-block'}) 
+        style={'width': '49%', 'display': 'inline-block', 'textAlign': 'center'}) 
 
     return fig
 
@@ -66,14 +66,12 @@ def scatter(pulse_data, type_of_pulse):
     fig = html.Div([
         dcc.Graph(
             id='avg_fig-{0}'.format(pulse_data['index']),
-            figure={'data': [go.Scatter(x=pulse_data['times'],
+            figure={'data': [go.Scattergl(x=pulse_data['times'],
                                         y=np.mean(pulse_data[type_of_pulse], axis=0),
                                         name='{0:0.1f}'.format(pulse_data['amu']),
                                         mode='lines',
                                         opacity=1.0,
-                                        line={'shape':'spline',
-                                              'smoothing':0,
-                                              'color':colors[k]})],
+                                        line={'color':colors[k]})],
                     
                     'layout': go.Layout(xaxis={'title': {'text': 'Time (s)',
                                                          'font': {'size': 20}},

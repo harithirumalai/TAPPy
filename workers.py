@@ -133,7 +133,7 @@ def update_database(list_of_data, current_data):
         temp = {}
         return append_data(temp, list_of_data)
 
-
+    
 # Creates a new or appends to an existing dcc.Store component with raw data from the Upload component
 def append_data(temp, list_of_data):
     if len(list_of_data) is not None:
@@ -171,7 +171,36 @@ def append_data(temp, list_of_data):
         return dcc.Store(id='raw_data', data=temp)
     
 
+# Function that stores 25 random pulses in order in the "condensed-data-tab1" dcc.Storage component.
+def store_condensed(raw_pulse_data, current_cond_data):
+    if current_cond_data is not None:
+            raw_data = dict(raw_pulse_data[0]['props']['data'])
+            for amu in raw_data.keys():
+                temp = raw_data[amu].copy()
+                pulses = temp['pulses']
+                inds = np.sort(np.random.randint(0, len(pulses), 25))
+                pulses_i = np.array([pulses[i] for i in inds])
+                temp['pulses'] = pulses_i.tolist()
 
+                current_cond_data[amu] = temp
+
+            return current_cond_data
+        
+    else:
+        cond_data = {}
+        raw_data = dict(raw_pulse_data[0]['props']['data'])
+        for amu in raw_data.keys():
+            temp = raw_data[amu].copy()
+            pulses = temp['pulses']
+            inds = np.sort(np.random.randint(0, len(pulses), 25))
+            pulses_i = np.array([pulses[i] for i in inds])
+            temp['pulses'] = pulses_i.tolist()
+            
+            cond_data[amu] = temp
+
+        return cond_data
+
+    
 # Appends to or creates a new dcc.Store data object that stores all pre-processed data from tab 2
 def store_data(temp, data):
     if data is not None:
