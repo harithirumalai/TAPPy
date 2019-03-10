@@ -15,9 +15,6 @@ from scipy.integrate import trapz
 import cPickle as pickle
 from math import factorial
 
-#import sys
-#sys.path.append(r'..')
-
 
 # Create a TAPSuite-data folder in the user's home directory to store temp files
 home = os.path.expanduser('~')

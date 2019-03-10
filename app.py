@@ -5,23 +5,28 @@ from dash.dependencies import Input, Output, State
 import dash_core_components as dcc
 
 import flask
+from flask_caching import Cache
 
 import figures
 import layouts
 import workers
-import os
-from flask_caching import Cache
-
 
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
+
+cache = Cache(app.server, config={
+    'CACHE_TYPE': 'filesystem',
+    'CACHE_DIR': 'cache-directory',
+    'CACHE_THRESHOLD': 50  # should be equal to maximum number of active users
+})
 
 server = app.server
 
 app.config['suppress_callback_exceptions'] = True
 
 app.layout = layouts.app_layout()
+
 
 
 ######################################################################################
@@ -90,9 +95,9 @@ def update_amu_dropdown(raw_data):
 # baseline correction is enabled for the AMU chosen by user
 @app.callback(Output('baseline-corr-slider', 'children'),
               [Input('baseline-corr-radioitems', 'value'),
-               Input('amu-dropdown', 'value')],
-              [State('condensed-data-tab1', 'data')])
-def update_baseline_corr_slider(corr, amu, raw_data):
+               Input('condensed-data-tab1', 'data'),
+               Input('amu-dropdown', 'value')])
+def update_baseline_corr_slider(corr, raw_data, amu):
     if amu is not None:
         dataset = raw_data[amu]
         children = layouts.baseline_corr_slider(dataset, disable=not(corr))
@@ -119,6 +124,7 @@ def display_sg_order_slider(smooth):
     else:
         return True
 
+    
 @app.callback(Output('sg-window-size-slider', 'disabled'),
               [Input('sg-order-slider', 'disabled')])
 def display_sg_window_slider(order):
@@ -142,14 +148,14 @@ def update_sg_window_size(order):
 # Store corrected data in temp storage. This can be accessed by the user
 # to download xlsx files for the chosen amu.
 @app.callback(Output('temp-data', 'children'),
-              [Input('amu-dropdown', 'value'),
+              [Input('data-tab1', 'children'),
+               Input('amu-dropdown', 'value'),
+               Input('baseline-corr-radioitems', 'value'),
                Input('time-range-slider', 'value'),
+               Input('sg-radioitems', 'value'),
                Input('sg-window-size-slider', 'value'),
-               Input('sg-order-slider', 'value')],
-              [State('data-tab1', 'children'),
-               State('baseline-corr-radioitems', 'value'),
-               State('sg-radioitems', 'value')])
-def perform_correction(amu, timespan, window_size, order, raw_pulse_data, corr, smooth):
+               Input('sg-order-slider', 'value')])
+def perform_correction(raw_pulse_data, amu, corr, timespan, smooth, window_size, order):
     if amu is not None:        
         if corr is True and smooth is True:
             x = 'baseline corr smooth pulses'
@@ -188,8 +194,8 @@ def plot_avg_pulse(stuff):
 # Read params from temp data and correct full data with the same params.
 # Store in temp-data-full
 @app.callback(Output('temp-data-full', 'data'),
-              [Input('temp-data', 'children')],
-              [State('data-tab1', 'children')])
+              [Input('temp-data', 'children'),
+               Input('data-tab1', 'children')])
 def correct_all_pulses(stuff, raw_pulse_data):
     if stuff is not None:
         temp_data, params = stuff

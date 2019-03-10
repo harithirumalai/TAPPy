@@ -197,14 +197,16 @@ def tab2():
                                     'margin': '10px',
                                     'height': '60px'}),
                     
-                    html.Div([html.A(html.Button('Download', id='download-button-1'),
+                    html.Div([#html.Br(),
+
+                              html.A(html.Button('Download', id='download-button-1'),
                                      id='download-link-1',
                                      target='_blank')],
                              
                              style={'width': '49%',
                                     'display': 'inline-block',
                                     'lineHeight': '180px',
-                                    'height': '130px'}),
+                                    'height': '140px'}),
 
                     html.Hr(),
 
