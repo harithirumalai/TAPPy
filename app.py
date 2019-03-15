@@ -14,6 +14,7 @@ import workers
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
+#app = dash.Dash(__name__)
 
 cache = Cache(app.server, config={
     'CACHE_TYPE': 'filesystem',
@@ -37,6 +38,13 @@ app.layout = layouts.app_layout()
     
 # Save raw data from pulse files from the upload component
 # in hidden html.Divs.
+
+@cache.memoize()
+def store_data_tab1(list_of_data, current_data):
+    return [workers.update_database(list_of_data, current_data)]
+
+
+
 @app.callback(Output('data-tab1', 'children'),
               [Input('upload-files', 'contents')],
               [State('upload-files', 'filename'),
@@ -48,10 +56,13 @@ def read_store_uploaded_files(list_of_contents, list_of_names, current_data):
         sorted_filenames = sorted(list_of_names)
         list_of_data = [workers.load_data(c, n) for c, n in zip(sorted_contents, sorted_filenames)]
 
-        children = [workers.update_database(list_of_data, current_data)]
+        children = store_data_tab1(list_of_data, current_data)
 
         return children
 
+@cache.memoize()
+def store_condensed_data_tab1(raw_pulse_data, current_cond_data):
+    return workers.store_condensed(raw_pulse_data, current_cond_data)
     
 # Store 25 randomly generated pulses in the "condensed-data-tab1" dcc.Storage component
 # Use these data in the preprocessing section for faster functioning.
@@ -60,7 +71,7 @@ def read_store_uploaded_files(list_of_contents, list_of_names, current_data):
               [State('condensed-data-tab1', 'data')])
 def store_condensed_tab1(raw_pulse_data, current_cond_data):
     if raw_pulse_data is not None:
-        data = workers.store_condensed(raw_pulse_data, current_cond_data)
+        data = store_condensed_data_tab1(raw_pulse_data, current_cond_data)
 
         return data
                 
@@ -147,6 +158,10 @@ def update_sg_window_size(order):
 # Perform all operations as set by the user.
 # Store corrected data in temp storage. This can be accessed by the user
 # to download xlsx files for the chosen amu.
+@cache.memoize()
+def store_corrected_temp_data(temp_data, x):
+    return [dcc.Store(id='temp', data=temp_data), x]
+
 @app.callback(Output('temp-data', 'children'),
               [Input('data-tab1', 'children'),
                Input('amu-dropdown', 'value'),
@@ -176,7 +191,7 @@ def perform_correction(raw_pulse_data, amu, corr, timespan, smooth, window_size,
         temp_data['data'] = corrected_dataset
         temp_data['params'] = params
         
-        return [dcc.Store(id='temp', data=temp_data), x]#, params]
+        return store_corrected_temp_data(temp_data, x)
 
     
 # Read the temp data and plot the average pulse 
@@ -193,6 +208,11 @@ def plot_avg_pulse(stuff):
 
 # Read params from temp data and correct full data with the same params.
 # Store in temp-data-full
+@cache.memoize()
+def temp_data_store(temp_data):
+    return temp_data
+
+
 @app.callback(Output('temp-data-full', 'data'),
               [Input('temp-data', 'children'),
                Input('data-tab1', 'children')])
@@ -208,17 +228,21 @@ def correct_all_pulses(stuff, raw_pulse_data):
         temp_data['data'] = corrected_dataset
         temp_data['type_of_pulse'] = x
         
-        return temp_data
+        return temp_data_store(temp_data)
 
 # Read data from temp-data-full and append to data in data-tab2
+@cache.memoize()
+def full_data_store(current_data, temp_data):
+    return [workers.store_pp_pulses(current_data,
+                                            temp_data['data'],
+                                            temp_data['type_of_pulse'])]
+
 @app.callback(Output('data-tab2', 'children'),
               [Input('temp-data-full', 'data')],
               [State('data-tab2', 'children')])
 def store_pulses(temp_data, current_data):
     if temp_data is not None:
-        children = [workers.store_pp_pulses(current_data,
-                                            temp_data['data'],
-                                            temp_data['type_of_pulse'])]
+        children = full_data_store(current_data, temp_data)
         
         return children
 
