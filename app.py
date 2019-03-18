@@ -325,5 +325,5 @@ def download_xlsx_inert():
     return downloadlink
 
 if __name__ == '__main__':
-    app.run_server(debug=True, processes=6)
+    app.run_server(debug=True)
 
