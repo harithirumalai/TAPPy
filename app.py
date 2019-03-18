@@ -14,13 +14,14 @@ import workers
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
-#app = dash.Dash(__name__)
 
 cache = Cache(app.server, config={
     'CACHE_TYPE': 'filesystem',
     'CACHE_DIR': 'cache-directory',
     'CACHE_THRESHOLD': 50  # should be equal to maximum number of active users
 })
+
+cache.clear()
 
 server = app.server
 
@@ -42,7 +43,6 @@ app.layout = layouts.app_layout()
 @cache.memoize()
 def store_data_tab1(list_of_data, current_data):
     return [workers.update_database(list_of_data, current_data)]
-
 
 
 @app.callback(Output('data-tab1', 'children'),
@@ -325,5 +325,5 @@ def download_xlsx_inert():
     return downloadlink
 
 if __name__ == '__main__':
-    app.run_server(debug=True)
+    app.run_server(debug=True, processes=6)
 
