@@ -10,25 +10,38 @@ from flask_caching import Cache
 import figures
 import layouts
 import workers
+import os
+import shutil
 
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
 
+# Local cache settings
 cache = Cache(app.server, config={
     'CACHE_TYPE': 'filesystem',
     'CACHE_DIR': 'cache-directory',
     'CACHE_THRESHOLD': 50  # should be equal to maximum number of active users
 })
-
 cache.clear()
 
+# Enable multithreading through the "Server" call
 server = app.server
 
 app.config['suppress_callback_exceptions'] = True
 
+# Set up app layouts
 app.layout = layouts.app_layout()
 
+
+# Create a TAPSuite-data folder in the user's home directory to store temp files
+home = os.path.expanduser('~')
+savedir = os.path.join(home, 'TAPSuite-data')
+if not os.path.exists(savedir):
+    os.mkdir(savedir)
+else:
+    shutil.rmtree(savedir)
+    os.mkdir(savedir)
 
 
 ######################################################################################

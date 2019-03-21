@@ -13,7 +13,7 @@ def scatter3d(pulse_data, k):
     n_time_pts = len(pulse_data['times'])
     index = pulse_data['index']
     n_pulses = len(pulse_data['pulses'])
-    inds = np.arange(0, n_pulses)
+
     xdata = np.array([pulse_data['times'],]*n_pulses)
     zdata = pulse_data['pulses']
     ydata = np.array([[i+1]*n_time_pts for i in range(n_pulses)])

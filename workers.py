@@ -9,22 +9,13 @@ import numpy as np
 import pandas as pd
 from flask import send_file
 import os
-import shutil
 from pandas import ExcelWriter
 from scipy.integrate import trapz
 import cPickle as pickle
 from math import factorial
 
-
-# Create a TAPSuite-data folder in the user's home directory to store temp files
 home = os.path.expanduser('~')
 savedir = os.path.join(home, 'TAPSuite-data')
-if not os.path.exists(savedir):
-    os.mkdir(savedir)
-else:
-    shutil.rmtree(savedir)
-    os.mkdir(savedir)
-
 
 # Function to process raw TAP-1 files generated from experiments
 def read_raw(fil):
@@ -297,6 +288,7 @@ def select_dataset(raw_data, amu):
         return dataset
 
 
+# Function that performs the savitzky golay smoothing per arguments passed by user
 def savitzky_golay(y, window_size, order, deriv=0, rate=1):
 #    Taken from https://scipy-cookbook.readthedocs.io/items/SavitzkyGolay.html
 #    Have not really thought much about it. Hopefully works for all cases!
@@ -392,6 +384,7 @@ def get_areas(pulses, t):
 
     return areas
 
+# Implementation of the inert normalization routines to obtain the final clean data for further analysis
 def inert_normalization(amu_inert, pulses_data_all):
     normdir = os.path.join(savedir, 'normalized')
     if not os.path.exists(normdir):
@@ -452,6 +445,7 @@ def create_download_link(amu):
         cache_timeout=0)
 
 
+# Function that combines inert normalized .npy pulse data into one whole .xslx file ready for download.
 def create_download_link_norm(amu_inert):
     normdir = os.path.join(savedir, 'normalized')
     buf = io.BytesIO()
