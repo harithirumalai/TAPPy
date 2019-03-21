@@ -39,16 +39,11 @@ app.layout = layouts.app_layout()
     
 # Save raw data from pulse files from the upload component
 # in hidden html.Divs.
-
-@cache.memoize()
-def store_data_tab1(list_of_data, current_data):
-    return [workers.update_database(list_of_data, current_data)]
-
-
 @app.callback(Output('data-tab1', 'children'),
               [Input('upload-files', 'contents')],
               [State('upload-files', 'filename'),
                State('data-tab1', 'children')])
+@cache.memoize()
 def read_store_uploaded_files(list_of_contents, list_of_names, current_data):
     
     if list_of_contents is not None:
@@ -56,22 +51,20 @@ def read_store_uploaded_files(list_of_contents, list_of_names, current_data):
         sorted_filenames = sorted(list_of_names)
         list_of_data = [workers.load_data(c, n) for c, n in zip(sorted_contents, sorted_filenames)]
 
-        children = store_data_tab1(list_of_data, current_data)
+        children = [workers.update_database(list_of_data, current_data)]
 
         return children
 
-@cache.memoize()
-def store_condensed_data_tab1(raw_pulse_data, current_cond_data):
-    return workers.store_condensed(raw_pulse_data, current_cond_data)
     
 # Store 25 randomly generated pulses in the "condensed-data-tab1" dcc.Storage component
-# Use these data in the preprocessing section for faster functioning.
+# Use these data in the preprocessing section for faster responses.
 @app.callback(Output('condensed-data-tab1', 'data'),
               [Input('data-tab1', 'children')],
               [State('condensed-data-tab1', 'data')])
+@cache.memoize()
 def store_condensed_tab1(raw_pulse_data, current_cond_data):
     if raw_pulse_data is not None:
-        data = store_condensed_data_tab1(raw_pulse_data, current_cond_data)
+        data = workers.store_condensed(raw_pulse_data, current_cond_data)
 
         return data
                 
@@ -95,8 +88,8 @@ def update_amu_dropdown(raw_data):
         
         children = [dcc.Dropdown(id='amu-dropdown',
                             options=[{'label': '{0}'.format(amu),
-                                       'value': '{0}'.format(amu)}
-                                      for amu in amus],
+                                      'value': '{0}'.format(amu)}
+                                     for amu in amus],
 
                             style={'width': '49%', 'display': 'inline-block'})]
         return children
@@ -106,9 +99,9 @@ def update_amu_dropdown(raw_data):
 # baseline correction is enabled for the AMU chosen by user
 @app.callback(Output('baseline-corr-slider', 'children'),
               [Input('baseline-corr-radioitems', 'value'),
-               Input('condensed-data-tab1', 'data'),
-               Input('amu-dropdown', 'value')])
-def update_baseline_corr_slider(corr, raw_data, amu):
+               Input('amu-dropdown', 'value')],
+              [State('condensed-data-tab1', 'data')])
+def update_baseline_corr_slider(corr, amu, raw_data):
     if amu is not None:
         dataset = raw_data[amu]
         children = layouts.baseline_corr_slider(dataset, disable=not(corr))
@@ -135,18 +128,17 @@ def display_sg_order_slider(smooth):
     else:
         return True
 
-    
 @app.callback(Output('sg-window-size-slider', 'disabled'),
               [Input('sg-order-slider', 'disabled')])
 def display_sg_window_slider(order):
     return order
-    
+
+
 # Update the Savitzky-Golay window size slider based on Order input
 @app.callback(Output('sg-window-size-container', 'children'),
               [Input('sg-order-slider', 'value')])
 def update_sg_window_size(order):
     return layouts.sg_window_size_slider(order)
-
 
     
 # Take input from the all input fields
@@ -158,19 +150,15 @@ def update_sg_window_size(order):
 # Perform all operations as set by the user.
 # Store corrected data in temp storage. This can be accessed by the user
 # to download xlsx files for the chosen amu.
-@cache.memoize()
-def store_corrected_temp_data(temp_data, x):
-    return [dcc.Store(id='temp', data=temp_data), x]
-
 @app.callback(Output('temp-data', 'children'),
               [Input('data-tab1', 'children'),
                Input('amu-dropdown', 'value'),
-               Input('baseline-corr-radioitems', 'value'),
                Input('time-range-slider', 'value'),
-               Input('sg-radioitems', 'value'),
                Input('sg-window-size-slider', 'value'),
-               Input('sg-order-slider', 'value')])
-def perform_correction(raw_pulse_data, amu, corr, timespan, smooth, window_size, order):
+               Input('sg-order-slider', 'value')],
+              [State('baseline-corr-radioitems', 'value'),
+               State('sg-radioitems', 'value')])
+def perform_correction(raw_pulse_data, amu, timespan, window_size, order, corr, smooth):
     if amu is not None:        
         if corr is True and smooth is True:
             x = 'baseline corr smooth pulses'
@@ -184,14 +172,13 @@ def perform_correction(raw_pulse_data, amu, corr, timespan, smooth, window_size,
         dataset = dict(raw_pulse_data[0]['props']['data'])[amu]
         corrected_dataset = workers.correct_data(dataset, x, timespan, corr,
                                                  smooth, window_size, order)
-
         params = [amu, x, timespan, corr, smooth, window_size, order]
 
         temp_data = {}
         temp_data['data'] = corrected_dataset
         temp_data['params'] = params
         
-        return store_corrected_temp_data(temp_data, x)
+        return [dcc.Store(id='blah', data=temp_data), x]
 
     
 # Read the temp data and plot the average pulse 
@@ -206,69 +193,44 @@ def plot_avg_pulse(stuff):
         return children
 
 
-# Read params from temp data and correct full data with the same params.
-# Store in temp-data-full
-@cache.memoize()
-def temp_data_store(temp_data):
-    return temp_data
-
-
-@app.callback(Output('temp-data-full', 'data'),
-              [Input('temp-data', 'children'),
-               Input('data-tab1', 'children')])
-def correct_all_pulses(stuff, raw_pulse_data):
-    if stuff is not None:
-        temp_data, params = stuff
-        amu, x, timespan, corr, smooth, window_size, order = temp_data['props']['data']['params']
-        dataset = dict(raw_pulse_data[0]['props']['data'])[amu]
-        corrected_dataset = workers.correct_data(dataset, x, timespan, corr,
-                                                 smooth, window_size, order)
-
-        temp_data = {}
-        temp_data['data'] = corrected_dataset
-        temp_data['type_of_pulse'] = x
-        
-        return temp_data_store(temp_data)
-
-# Read data from temp-data-full and append to data in data-tab2
-@cache.memoize()
-def full_data_store(current_data, temp_data):
-    return [workers.store_pp_pulses(current_data,
-                                            temp_data['data'],
-                                            temp_data['type_of_pulse'])]
-
-@app.callback(Output('data-tab2', 'children'),
-              [Input('temp-data-full', 'data')],
-              [State('data-tab2', 'children')])
-def store_pulses(temp_data, current_data):
-    if temp_data is not None:
-        children = full_data_store(current_data, temp_data)
-        
-        return children
-
 # Monitor and create new link for dynamically modified data, when new data is stored
 # in the temp stoarge as the preprocessing is performed by the user.
 # The href component of the download button is updated through the
 # Flask server route and an xlsx file is generated for download
 @app.callback(Output('download-link-1', 'href'),
-              [Input('temp-data-full', 'data')])
-def update_link1(stuff):
-    if stuff is not None:
-        pulse_data, x = stuff['data'], stuff['type_of_pulse']
-        amu = '{0:0.1f}'.format(pulse_data['amu'])
-        workers.write_temp(pulse_data, x)
-    
+              [Input('temp-data', 'children'),
+               Input('amu-dropdown', 'value')],
+              [State('data-tab1', 'children')])
+def update_link1(temp_data_amu, amu, raw_data_dict):
+    if amu is not None:
+        raw_data = dict(raw_data_dict[0]['props']['data'])[amu]
+        amu, x, timespan, corr, smooth, window_size, order = temp_data_amu[0]['props']['data']['params']
+
+        corrected_dataset = workers.correct_data(raw_data, x, timespan, corr,
+                                                     smooth, window_size, order)
+        
+        workers.write_temp(corrected_dataset, x)
         return '/dash/url?value={0}'.format(amu)
 
     
-# Defining the route for the download link
+# Defining the route for the download link and making the xslx available
 @app.server.route('/dash/url')
 def download_xlsx():
     amu = flask.request.args.get('value')
     downloadlink = workers.create_download_link(amu)
-
     return downloadlink
 
+    
+# Append temp params to existing params in the "temp-data-full" dcc.Store component
+@app.callback(Output('full-temp-data', 'data'),
+              [Input('temp-data', 'children')],
+              [State('full-temp-data', 'data')])
+def append_temp_data(stuff, current_temp_data):
+    if stuff is not None:
+        temp_data, _ = stuff
+        data = workers.append_to_temp_data_full(temp_data, current_temp_data)
+        return data
+           
 
 # Reset data correction sliders to Disabled when amu is changed by user
 @app.callback(Output('baseline-corr-radioitems', 'value'),
@@ -283,36 +245,57 @@ def reset_sg_sliders(amu):
     return False
 
 
+# Apply corrections to full dataset from "data-tab1" based on params stored in "temp-data-full" based on user's choice in "all-corr-radioitems"
+@app.callback(Output('data-tab2', 'data'),
+              [Input('all-corr-radioitems', 'value'),
+               Input('full-temp-data', 'data')],
+              [State('data-tab1', 'children'),
+               State('data-tab2', 'data')])
+def correct_store_pulses(all_corr, temp_data, raw_data_dict, current_temp_data):
+    if all_corr is True:
+        return workers.correct_full_data(temp_data, raw_data_dict, current_temp_data)
+
+
+# Display message whether apply-all is enabled or not
+@app.callback(Output('apply-all', 'children'),
+              [Input('all-corr-radioitems', 'value')])
+def corr_status(value):
+    if value is True:
+        return 'Corrections applied to full data'
+
+
 # Update the inert normalization dropdown based on the amu keys stored in the
 # global data dict.
-@app.callback(Output('inert-dropdown', 'options'),
-              [Input('data-tab2', 'children')])
+@app.callback(Output('inert-dropdown-container', 'children'),
+              [Input('data-tab2', 'data')])
 def update_inert_dropdown(current_data):
     if current_data is not None:
-        amus = dict(current_data[0]['props']['data']).keys()
-        options = [{'label': '{0}'.format(amu),
-                    'value': '{0}'.format(amu)} for amu in amus]
-    
-        return options
+        amus = current_data.keys()
+        children = [dcc.Dropdown(id='inert-dropdown',
+                                 options=[{'label': '{0}'.format(amu),
+                                           'value': '{0}'.format(amu)}
+                                          for amu in amus],
+
+                                 style={'width': '99%', 'display': 'inline-block'})]
+        return children
     
 
+# Inert normalize all data based on amu choice by user
 @app.callback(Output('inert-output', 'children'),
               [Input('inert-dropdown', 'value')],
-              [State('data-tab2', 'children')])
+              [State('data-tab2', 'data')])
 def update_text_do_norm(amu_inert, current_data):
     if amu_inert is not None:
-        pulse_data_all = dict(current_data[0]['props']['data'])
-        workers.inert_normalization(amu_inert, pulse_data_all)
+        workers.inert_normalization(amu_inert, current_data)
         return 'Inert species AMU chosen: {0}'.format(amu_inert)
 
 
 # Update inert normalization download link based on inert-dropdown choice
 # Combined xlsx is created on the fly when download button is clicked and
 # user the latest data from tab 2
-@app.callback(Output('download-link-3', 'href'),
-              [Input('inert-dropdown', 'value'),
-               Input('data-tab2', 'children')])
-def update_link3(amu_inert, value):
+@app.callback(Output('download-link-2', 'href'),
+              [Input('inert-dropdown', 'value')])
+def update_link2(amu_inert):
     if amu_inert is not None:
         return '/dash/url2?value={0}'.format(amu_inert)
 
@@ -324,6 +307,8 @@ def download_xlsx_inert():
 
     return downloadlink
 
+# Run the app
 if __name__ == '__main__':
-    app.run_server(debug=True)
+#    app.run_server(debug=True)
+    app.run_server(debug=True, processes=6)
 

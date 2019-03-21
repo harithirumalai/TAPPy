@@ -236,7 +236,59 @@ def store_pp_pulses(current_data, data, pulse_type):
             temp = {}
             return store_data(temp, final_data)
 
-                         
+
+# Function that appends temp data params with amus as keys
+def append_to_temp_data_full(temp_data, current_temp_data):
+    if current_temp_data is None:
+        temp = {}
+        params = temp_data['props']['data']['params']
+        amu = params[0]
+        temp[amu] = params
+
+        return temp
+
+    else:
+        temp = current_temp_data
+        params = temp_data['props']['data']['params']
+        amu = params[0]
+        temp[amu] = params
+
+        return temp
+
+
+# Correct the raw data from tab1 with the params stored in temp-data-full
+def correct_full_data(temp_data, raw_data, current_temp_data):
+    if current_temp_data is not None:
+        temp = current_temp_data
+        raw_data = dict(raw_data[0]['props']['data'])
+        amus = temp_data.keys()
+        
+        for amu in amus:
+            amu, x, timespan, corr, smooth, window_size, order = temp_data[amu]
+            corrected_dataset = correct_data(raw_data[amu], x, timespan, corr,
+                                             smooth, window_size, order)
+            temp[amu] = {}
+            temp[amu]['data'] = corrected_dataset
+            temp[amu]['params'] = temp_data[amu]
+        
+        return temp
+
+    else:
+        temp = {}
+        raw_data = dict(raw_data[0]['props']['data'])
+        amus = temp_data.keys()
+        
+        for amu in amus:
+            amu, x, timespan, corr, smooth, window_size, order = temp_data[amu]
+            corrected_dataset = correct_data(raw_data[amu], x, timespan, corr,
+                                             smooth, window_size, order)
+            temp[amu] = {}
+            temp[amu]['data'] = corrected_dataset
+            temp[amu]['params'] = temp_data[amu]
+        
+        return temp
+
+    
 # Function that reads raw data in Tab 1 and returns data set corresponding to
 # the AMU chosen
 def select_dataset(raw_data, amu):
@@ -252,7 +304,7 @@ def savitzky_golay(y, window_size, order, deriv=0, rate=1):
     try:
         window_size = np.abs(np.int(window_size))
         order = np.abs(np.int(order))
-    except ValueError, msg:
+    except ValueError:
         raise ValueError("window_size and order have to be of type int")
 
     if window_size % 2 != 1 or window_size < 1:
@@ -341,18 +393,18 @@ def get_areas(pulses, t):
     return areas
 
 def inert_normalization(amu_inert, pulses_data_all):
-    
     normdir = os.path.join(savedir, 'normalized')
     if not os.path.exists(normdir):
         os.mkdir(normdir)        
     
-    pulses_combined, amus = [], []
-    for amu in pulses_data_all.keys():
-        stuff = np.array(pulses_data_all[amu])
-        amus.append(amu)
-        pulses_combined.append(stuff[3:])
-        times = stuff[1]
+    pulses_combined = []
+    amus = pulses_data_all.keys()
+    for amu in amus:
+        data = pulses_data_all[amu]['data']
+        x = pulses_data_all[amu]['params'][1]
 
+        pulses_combined.append(data[x])
+        times = np.array(data['times'])
 
     inert_index = amus.index(amu_inert)
     pulses_areas = [get_areas(pulses, times) for pulses in pulses_combined]
@@ -401,7 +453,6 @@ def create_download_link(amu):
 
 
 def create_download_link_norm(amu_inert):
-
     normdir = os.path.join(savedir, 'normalized')
     buf = io.BytesIO()
     excel_writer = ExcelWriter(buf)

@@ -3,7 +3,6 @@
 import dash_html_components as html
 import dash_core_components as dcc
 
-import workers
 
 # App Layout
 def app_layout():
@@ -84,9 +83,8 @@ def tab1():
         
         html.Div(id='data-tab1', style={'display': 'none'}),
 
-        #html.Div(dcc.Store(id='condensed-data-tab1')),
+        html.Div(dcc.Store(id='condensed-data-tab1'))
 
-        html.Div(id='condensed-data-tab1', style={'display': 'none'})
     ]
 
 
@@ -130,9 +128,11 @@ def tab2():
 
                     html.Div(id='temp-data', style={'display': 'none'}),
 
-                    html.Div(dcc.Store(id='temp-data-full')),
+                    html.Div(dcc.Store(id='full-temp-data')),
 
-                    html.Div(id='data-tab2'),
+#                    html.Div(id='data-tab2', style={'display': 'none'}),
+
+                    html.Div(dcc.Store(id='data-tab2')),
 
                     html.Div(dcc.Store(id='condensed-data-tab2')),
 
@@ -193,20 +193,39 @@ def tab2():
                              
                              style={'width': '49%',
                                     'display': 'inline-block',
-                                    'lineHeight': '30px',
-                                    'margin': '10px',
-                                    'height': '60px'}),
-                    
-                    html.Div([#html.Br(),
+                                    'lineHeight': '40px',
+                                    'margin': '0px',
+                                    'height': '40px'}),
 
-                              html.A(html.Button('Download', id='download-button-1'),
-                                     id='download-link-1',
-                                     target='_blank')],
+                    html.Br(),
+                    
+                    html.Div(id='button-container',
+                             children=[html.A(html.Button('Download',
+                                                          id='download-button-1'),
+                                              id='download-link-1',
+                                              target='_blank')],
                              
                              style={'width': '49%',
                                     'display': 'inline-block',
-                                    'lineHeight': '180px',
+                                    'lineHeight': '200px',
                                     'height': '140px'}),
+
+                   
+                    html.Hr(),
+
+                    html.Div(children=[
+
+                        html.Label('Apply Corrections to All Data',
+                                   style={'font-weight': 'bold'}),
+
+                        dcc.RadioItems(id='all-corr-radioitems',
+                                       options=[
+                                           {'label': 'Enabled', 'value': True},
+                                           {'label': 'Disabled', 'value': False}],
+                                       value=False)
+                    ]),
+
+                    html.Div(id='apply-all', style={'color': '#c8102e'}),
 
                     html.Hr(),
 
@@ -215,22 +234,19 @@ def tab2():
 
                     html.Label('Select the inert species AMU'),
 
-                    html.Div(dcc.Dropdown(id='inert-dropdown'), 
+                    html.Div(id='inert-dropdown-container', 
                              style={'width': '25%',
                                     'display': 'inline-block'}),
 
                     html.Div(id='inert-output', style={'color': '#c8102e'}),
 
-                    html.Div(children=[html.A(html.Button('Download', id='download-button-3'),
-                                              id='download-link-3',
+                    html.Div(children=[html.A(html.Button('Download', id='download-button-2'),
+                                              id='download-link-2',
                                               target='_blank')],
                              style={'width': '49%',
                                     'display': 'inline-block',
                                     'lineHeight': '90px',
-                                    'height': '60px'}),
-
-                    html.Hr()
-                
+                                    'height': '60px'}),                
                 ],
 
                          className='six columns')],
@@ -284,15 +300,3 @@ def sg_window_size_slider(order):
 
     return children
 
-
-# Layout for the inert-normalization dropdown
-def update_inert_normalization_dropdown(amus):
-
-    print 'hue', amus
-    children = [
-    
-        
-
-    ]
-
-    return children
