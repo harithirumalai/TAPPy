@@ -9,6 +9,6 @@ The structure of the app is as follows:
 - ```app.py```: The main ```.py``` file that renders and functionalizes the app. Callbacks are defined for ```HTML``` and ```Javascript``` based interactive components and actions are performed based on user-selected arguments.
 - ```workers.py```: The core processing modules including data processing and storage.
 - ```layouts.py```: Consists of the ```HTML``` and ```Dash``` components that render the UI of the app.
-- ```figures.py```: The code and structure used to render the scatter and scatter3D figures in the app.
+- ```figures.py```: The code and structure used to render the ```plotly.go.scatter``` and ```plotly.go.scatter3D``` figures in the app.
 
 
